@@ -3,10 +3,7 @@
 #
 $policy = Get-ExecutionPolicy 
 if($policy -ne 'unrestricted'){
-    try{
         Set-ExecutionPolicy unrestricted -Confirm:$false -Force
-    }
-    catch{"Run as an administrator !!!"}
 }
 #
 #install and import required modules
@@ -24,38 +21,44 @@ if(!(Get-Module posh-ssh)){
 #variables for setting ftp user and paths
 #
 $mc_path = $env:USERPROFILE + '\AppData\Roaming\.minecraft'
-$ftp_path = '/username/folder-mods'  #path to mods folder on sftp server
-$pass = ConvertTo-SecureString "[password)$" -AsPlainText -Force   #sftp password
-$login = "username"   #sftp login
-$ftp_ip = 'ip-address'
+$ftp_path = 'path'  #path to mods folder on sftp server
+$pass = ConvertTo-SecureString "password" -AsPlainText -Force   #sftp password
+$login = "login"   #sftp login
+$ftp_ip = "ip"   #server domainame or ip
 #
 #get the sftp connection
 #
 $session = New-SFTPSession -Computer $ftp_ip -Credential (New-Object System.Management.Automation.PSCredential -ArgumentList $login, $pass) -AcceptKey
 #
+#Synchronise mods from the server to host
 #
-#s
-if(Test-Path $mc_path\mods -PathType Container){
-    $loc_mods = Get-ChildItem -Path $mc_path\mods
-    $mods = Get-SFTPChildItem -SFTPSession $session -Path $ftp_path -File
+if(Test-Path $mc_path\mods -PathType Container){    
+    #if mods folder present get all installed mods
+    $loc_mods = Get-ChildItem -Path $mc_path\mods   
     if($loc_mods){
+        #if any mods are installed compare them to ones available on server
+        $mods = Get-SFTPChildItem -SFTPSession $session -Path $ftp_path -File
         $diffs = Compare-Object -ReferenceObject $mods -DifferenceObject $loc_mods -Property Name
         $diffs | foreach{
             $f_name = $_.Name
             if($_.SideIndicator -eq '<='){
+                #if mod is not present on host download it
                 Get-SFTPItem -SFTPSession $session -Path $ftp_path/$f_name -Destination $mc_path\mods
             }
             elseif($_.SideIndicator -eq '=>'){
+                #if mod on the host is not on the server remove it
                 Remove-Item -Path $mc_path\mods\$f_name
             }
         }
     }
     else{
+        #if mods folder empty, remove it and download one from the server
         Remove-Item -Path $mc_path\mods
         Get-SFTPItem -SFTPSession $session -Path $ftp_path -Destination $mc_path
     }
 }
 else{
+    #if mods folder does not exits download one from the server
     Get-SFTPItem -SFTPSession $session -Path $ftp_path -Destination $mc_path
 }
 #
